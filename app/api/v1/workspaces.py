@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +18,14 @@ from app.schemas.github import (
     GitHubInstallUrlResponse,
     GitHubRepositoryResponse,
 )
+from app.schemas.repository import (
+    RepositoryResponse,
+    RepositorySummary,
+    RepositoryTrackRequest,
+)
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceSummary
 from app.services.github_service import GitHubNotConnectedError, github_service
+from app.services.repository_service import RepositoryNotFoundError, repository_service
 from app.services.workspace_service import workspace_service
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -136,4 +144,98 @@ async def list_workspace_github_repositories(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"GitHub authentication error: {exc}",
+        ) from exc
+
+
+@router.post(
+    "/{workspace_id}/repositories/track",
+    response_model=RepositoryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def track_repository(
+    payload: RepositoryTrackRequest,
+    workspace: Workspace = Depends(get_owned_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> RepositoryResponse:
+    """Add a GitHub repository to tracking in this workspace (Owner only)."""
+    try:
+        repo = await repository_service.track_repository(
+            db, workspace=workspace, owner=payload.owner, repo=payload.repo
+        )
+        return RepositoryResponse.model_validate(repo)
+    except GitHubNotConnectedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except GitHubNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"GitHub repository {payload.owner}/{payload.repo} not found",
+        ) from exc
+    except GitHubRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"GitHub rate limit exceeded. Resets at: {exc.reset_at}",
+        ) from exc
+    except GitHubAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"GitHub authentication error: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/{workspace_id}/repositories/tracked",
+    response_model=list[RepositorySummary],
+)
+async def list_tracked_repositories(
+    workspace: Workspace = Depends(get_accessible_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> list[RepositorySummary]:
+    """List all tracked repositories stored in this workspace (Any member)."""
+    repos = await repository_service.list_tracked_repositories(db, workspace_id=workspace.id)
+    return [RepositorySummary.model_validate(r) for r in repos]
+
+
+@router.get(
+    "/{workspace_id}/repositories/tracked/{repository_id}",
+    response_model=RepositoryResponse,
+)
+async def get_tracked_repository(
+    repository_id: uuid.UUID,
+    workspace: Workspace = Depends(get_accessible_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> RepositoryResponse:
+    """Get details of a tracked repository (Any member)."""
+    try:
+        repo = await repository_service.get_tracked_repository(
+            db, workspace_id=workspace.id, repository_id=repository_id
+        )
+        return RepositoryResponse.model_validate(repo)
+    except RepositoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.delete(
+    "/{workspace_id}/repositories/tracked/{repository_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def untrack_repository(
+    repository_id: uuid.UUID,
+    workspace: Workspace = Depends(get_owned_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Remove a repository from tracking (Owner only)."""
+    try:
+        await repository_service.untrack_repository(
+            db, workspace_id=workspace.id, repository_id=repository_id
+        )
+    except RepositoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
         ) from exc
