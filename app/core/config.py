@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # GitHub integration placeholders. These hold configuration only; no real
-    # values are committed and the auth model is not yet decided.
+    # GitHub App configuration.
     github_api_url: str = "https://api.github.com"
+    github_app_slug: str | None = None
     github_client_id: str | None = None
     github_client_secret: str | None = None
     github_webhook_secret: str | None = None
