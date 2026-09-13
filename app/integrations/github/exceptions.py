@@ -19,3 +19,15 @@ class GitHubRateLimitError(GitHubIntegrationError):
     def __init__(self, message: str, reset_at: int | None = None) -> None:
         super().__init__(message)
         self.reset_at = reset_at
+
+
+class GitHubNotFoundError(GitHubIntegrationError):
+    """Raised when a requested GitHub resource is not found (HTTP 404)."""
+
+
+class GitHubAPIError(GitHubIntegrationError):
+    """Raised when GitHub API returns an unexpected non-2xx status code."""
+
+    def __init__(self, message: str, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
