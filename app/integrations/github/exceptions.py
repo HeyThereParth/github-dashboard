@@ -26,8 +26,8 @@ class GitHubNotFoundError(GitHubIntegrationError):
 
 
 class GitHubAPIError(GitHubIntegrationError):
-    """Raised when GitHub API returns an unexpected non-2xx status code."""
+    """Raised when GitHub API returns an unexpected non-2xx status code or malformed response."""
 
-    def __init__(self, message: str, status_code: int) -> None:
+    def __init__(self, message: str, status_code: int = 502) -> None:
         super().__init__(message)
         self.status_code = status_code

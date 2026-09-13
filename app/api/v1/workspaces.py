@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_accessible_workspace, get_current_user, get_owned_workspace
 from app.core.database import get_db
 from app.integrations.github.exceptions import (
+    GitHubAPIError,
     GitHubAppConfigError,
     GitHubAuthError,
     GitHubNotFoundError,
@@ -18,6 +19,10 @@ from app.schemas.github import (
     GitHubInstallUrlResponse,
     GitHubRepositoryResponse,
 )
+from app.schemas.pull_request import (
+    PullRequestListResponse,
+    SyncResultResponse,
+)
 from app.schemas.repository import (
     RepositoryResponse,
     RepositorySummary,
@@ -26,6 +31,7 @@ from app.schemas.repository import (
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceSummary
 from app.services.github_service import GitHubNotConnectedError, github_service
 from app.services.repository_service import RepositoryNotFoundError, repository_service
+from app.services.sync_service import RepositoryNotTrackedError, sync_service
 from app.services.workspace_service import workspace_service
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -239,3 +245,76 @@ async def untrack_repository(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "/{workspace_id}/repositories/tracked/{repository_id}/sync",
+    response_model=SyncResultResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def sync_repository(
+    repository_id: uuid.UUID,
+    workspace: Workspace = Depends(get_owned_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> SyncResultResponse:
+    """Trigger synchronization of pull requests for a tracked repository (Owner only)."""
+    try:
+        return await sync_service.sync_repository_pull_requests(
+            db, workspace_id=workspace.id, repository_id=repository_id
+        )
+    except RepositoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryNotTrackedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except GitHubNotConnectedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except GitHubRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+        ) from exc
+    except GitHubAPIError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/{workspace_id}/repositories/tracked/{repository_id}/pull-requests",
+    response_model=PullRequestListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def list_repository_pull_requests(
+    repository_id: uuid.UUID,
+    state: str | None = Query(None, description="Filter by state: open, closed, or all"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(50, ge=1, le=100, description="Items per page"),
+    workspace: Workspace = Depends(get_accessible_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> PullRequestListResponse:
+    """List synced pull requests for a tracked repository (Any workspace member)."""
+    try:
+        return await sync_service.list_repository_pull_requests(
+            db,
+            workspace_id=workspace.id,
+            repository_id=repository_id,
+            state=state,
+            page=page,
+            per_page=per_page,
+        )
+    except RepositoryNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+

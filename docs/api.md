@@ -77,11 +77,48 @@ Requires `member` or `owner` role.
 
 Response: `[GitHubRepositoryResponse]`.
 
-## Structure
+### POST /api/v1/workspaces/{workspace_id}/repositories/track
 
-Remaining namespaces (`users`, `repositories`, `issues`,
-`pull_requests`, `people`, `work`, `analytics`, `webhooks`, `sync`) are
-placeholders reserved for later phases.
+Enables tracking for a repository accessible through the connected GitHub App.
+Requires `owner` role.
+
+- Request: `{"owner": "...", "repo": "..."}` → `201` + `RepositoryResponse`.
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked
+
+Lists all repositories currently tracked in the workspace.
+Requires `member` or `owner` role.
+
+- Response: `[RepositorySummary]`.
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}
+
+Returns details of a single tracked repository.
+Requires `member` or `owner` role.
+
+- Response: `RepositoryResponse`.
+
+### DELETE /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}
+
+Removes a repository from tracking (cascades pull requests).
+Requires `owner` role.
+
+- Response: `204 No Content`.
+
+### POST /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/sync
+
+Triggers synchronization of all pull requests from GitHub and idempotently upserts them into PostgreSQL.
+Requires `owner` role.
+
+- Response: `SyncResultResponse` (`repository_id`, `synced_count`, `status="completed"`).
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/pull-requests
+
+Lists mirrored pull requests from local PostgreSQL storage with pagination and filtering.
+Requires `member` or `owner` role.
+
+- Query params: `state` (optional: `open`, `closed`, `all`), `page` (default 1), `per_page` (default 50, max 100).
+- Response: `PullRequestListResponse` (`items`, `total`, `page`, `per_page`).
 
 ## Conventions
 
