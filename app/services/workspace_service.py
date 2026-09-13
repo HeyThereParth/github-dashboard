@@ -61,5 +61,33 @@ class WorkspaceService:
 
         return workspace
 
+    async def get_workspace_for_owner(
+        self, db: AsyncSession, *, workspace_id: uuid.UUID, user_id: uuid.UUID
+    ) -> Workspace:
+        """Return the workspace if ``user_id`` is an owner, otherwise raise.
+
+        Raises ``WorkspaceNotFoundError`` when the workspace does not exist and
+        ``WorkspaceForbiddenError`` when the user is not an owner.
+        """
+        workspace = await self._repository.get_by_id(db, workspace_id)
+        if workspace is None:
+            raise WorkspaceNotFoundError()
+
+        membership = await self._repository.get_membership(
+            db, workspace_id=workspace_id, user_id=user_id
+        )
+        if membership is None or membership.role != WorkspaceRole.OWNER.value:
+            raise WorkspaceForbiddenError()
+
+        return workspace
+
+    async def set_github_installation(
+        self, db: AsyncSession, *, workspace: Workspace, installation_id: int | None
+    ) -> Workspace:
+        """Update the GitHub installation ID associated with a workspace."""
+        workspace.github_installation_id = installation_id
+        await db.flush()
+        return workspace
+
 
 workspace_service = WorkspaceService(workspace_repository)

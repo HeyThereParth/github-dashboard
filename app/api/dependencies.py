@@ -79,3 +79,24 @@ async def get_accessible_workspace(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have access to this workspace",
         ) from exc
+
+
+async def get_owned_workspace(
+    workspace_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Workspace:
+    """Return the workspace only if the current user is an owner."""
+    try:
+        return await workspace_service.get_workspace_for_owner(
+            db, workspace_id=workspace_id, user_id=current_user.id
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+        ) from exc
+    except WorkspaceForbiddenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner permissions required for this action",
+        ) from exc

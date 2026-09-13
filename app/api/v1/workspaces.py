@@ -1,13 +1,23 @@
-"""Workspace (tenant) API routes."""
-
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_accessible_workspace, get_current_user
+from app.api.dependencies import get_accessible_workspace, get_current_user, get_owned_workspace
 from app.core.database import get_db
+from app.integrations.github.exceptions import (
+    GitHubAppConfigError,
+    GitHubAuthError,
+    GitHubNotFoundError,
+    GitHubRateLimitError,
+)
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.schemas.github import (
+    GitHubConnectRequest,
+    GitHubInstallUrlResponse,
+    GitHubRepositoryResponse,
+)
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceSummary
+from app.services.github_service import GitHubNotConnectedError, github_service
 from app.services.workspace_service import workspace_service
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -39,3 +49,91 @@ async def get_workspace(
     workspace: Workspace = Depends(get_accessible_workspace),
 ) -> WorkspaceResponse:
     return WorkspaceResponse.model_validate(workspace)
+
+
+@router.get("/{workspace_id}/github/install-url", response_model=GitHubInstallUrlResponse)
+async def get_github_install_url(
+    workspace: Workspace = Depends(get_owned_workspace),
+) -> GitHubInstallUrlResponse:
+    """Generate the installation URL to connect the GitHub App to this workspace (Owner only)."""
+    try:
+        url = github_service.get_install_url(workspace.id)
+        return GitHubInstallUrlResponse(install_url=url)
+    except GitHubAppConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GitHub App is not configured on the server",
+        ) from exc
+
+
+@router.post("/{workspace_id}/github/connect", response_model=WorkspaceResponse)
+async def connect_github_installation(
+    payload: GitHubConnectRequest,
+    workspace: Workspace = Depends(get_owned_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> WorkspaceResponse:
+    """Link a GitHub App installation to this workspace (Owner only)."""
+    try:
+        updated = await github_service.connect_installation(
+            db, workspace=workspace, installation_id=payload.installation_id
+        )
+        return WorkspaceResponse.model_validate(updated)
+    except (GitHubAuthError, GitHubNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to verify GitHub installation: {exc}",
+        ) from exc
+
+
+@router.delete("/{workspace_id}/github/disconnect", response_model=WorkspaceResponse)
+async def disconnect_github_installation(
+    workspace: Workspace = Depends(get_owned_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> WorkspaceResponse:
+    """Disconnect GitHub from this workspace (Owner only)."""
+    updated = await github_service.disconnect_installation(db, workspace=workspace)
+    return WorkspaceResponse.model_validate(updated)
+
+
+@router.get(
+    "/{workspace_id}/github/repositories",
+    response_model=list[GitHubRepositoryResponse],
+)
+async def list_workspace_github_repositories(
+    workspace: Workspace = Depends(get_accessible_workspace),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(100, ge=1, le=100),
+) -> list[GitHubRepositoryResponse]:
+    """List all GitHub repositories accessible via the connected installation (Any member)."""
+    try:
+        repos = await github_service.list_workspace_repositories(
+            workspace, page=page, per_page=per_page
+        )
+        return [
+            GitHubRepositoryResponse(
+                github_id=r.github_id,
+                node_id=r.node_id,
+                name=r.name,
+                full_name=r.full_name,
+                private=r.private,
+                html_url=r.html_url,
+                default_branch=r.default_branch,
+                description=r.description,
+            )
+            for r in repos
+        ]
+    except GitHubNotConnectedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except GitHubRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"GitHub rate limit exceeded. Resets at: {exc.reset_at}",
+        ) from exc
+    except GitHubAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"GitHub authentication error: {exc}",
+        ) from exc
