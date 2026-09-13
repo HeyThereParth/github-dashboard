@@ -27,6 +27,17 @@ class RepositoryRepository:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def list_by_github_id(
+        self, db: AsyncSession, *, github_id: int
+    ) -> list[Repository]:
+        """Find all tracked repositories mirroring a GitHub repository numeric ID."""
+        stmt = select(Repository).where(
+            Repository.github_id == github_id,
+            Repository.is_tracked.is_(True),
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
     async def list_for_workspace(
         self, db: AsyncSession, *, workspace_id: uuid.UUID
     ) -> list[Repository]:

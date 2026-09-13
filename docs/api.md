@@ -120,6 +120,17 @@ Requires `member` or `owner` role.
 - Query params: `state` (optional: `open`, `closed`, `all`), `page` (default 1), `per_page` (default 50, max 100).
 - Response: `PullRequestListResponse` (`items`, `total`, `page`, `per_page`).
 
+### POST /api/v1/webhooks/github
+
+Receives GitHub webhook events with HMAC-SHA256 signature verification.
+Unauthenticated by user token; verified via GitHub `X-Hub-Signature-256` header against `GITHUB_WEBHOOK_SECRET`.
+
+- Headers: `X-GitHub-Event`, `X-Hub-Signature-256`.
+- Supported events:
+  - `ping`: responds with pong.
+  - `pull_request` (`opened`, `closed`, `synchronize`, `reopened`, `edited`): mirrors PR changes to Neon DB in real-time.
+- Response: `200 OK` + `{"status": "processed" | "pong" | "ignored", ...}`.
+
 ## Conventions
 
 - JSON bodies validated with Pydantic schemas (`app/schemas/`).
