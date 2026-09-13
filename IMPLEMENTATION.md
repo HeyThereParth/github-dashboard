@@ -6,15 +6,21 @@ See `ENGINEERING_APPROACH.md` for the reasoning behind these choices.
 ## Current status
 
 - **Phase 1 (Identity & Workspace) implemented.** Supabase Auth is the external
-  identity provider; the backend maintains internal `User` records, `Workspace`
-  tenants, and `WorkspaceMember` membership, with authentication and workspace
-  authorization enforced at the API layer.
-- **Implemented:** `/health`, `GET /api/v1/me`, `POST /api/v1/workspaces`,
-  `GET /api/v1/workspaces`, `GET /api/v1/workspaces/{id}`; the first Alembic
-  migration (`users`, `workspaces`, `workspace_members`).
-- **Not implemented:** GitHub authorization/OAuth, GitHub API calls, webhooks,
-  synchronization, GitHub/domain models, analytics, AI/LLM, billing,
-  notifications.
+  identity provider; internal `User`, `Workspace`, and `WorkspaceMember` models.
+- **Phase 2 (GitHub App Integration) implemented.** GitHub App asymmetric RS256
+  authentication, short-lived 1-hour installation token exchange with caching,
+  `github_installation_id` on workspaces, owner-only authorization, and repository
+  listing via `GitHubClient`.
+- **Implemented endpoints:** `/health`, `GET /api/v1/me`, `POST /api/v1/workspaces`,
+  `GET /api/v1/workspaces`, `GET /api/v1/workspaces/{id}`,
+  `GET /api/v1/workspaces/{id}/github/install-url`,
+  `POST /api/v1/workspaces/{id}/github/connect`,
+  `DELETE /api/v1/workspaces/{id}/github/disconnect`,
+  `GET /api/v1/workspaces/{id}/github/repositories`.
+- **Migrations:** Initial migration (`4663a065fb30`), `github_installation_id`
+  migration (`b8c3d1e2f4a5`).
+- **Not implemented:** Local GitHub entity mirroring (Phase 3), webhooks and
+  synchronization (Phase 4), background workers, analytics (Phase 5).
 
 ## Technology stack
 

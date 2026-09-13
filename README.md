@@ -3,10 +3,11 @@
 Backend service for GitHub Intelligence — a SaaS application that ingests,
 organizes, and derives insights from GitHub data.
 
-> **Current status: Phase 1 (Identity & Workspace).** Supabase Auth-backed
-> authentication, internal users, workspaces, and workspace membership are
-> implemented. GitHub integration is **not** implemented yet. See
-> [Current limitations](#current-limitations).
+> **Current status: Phase 2 (GitHub App Integration & Workspace Connection).**
+> Supabase Auth authentication, internal users, workspaces, membership RBAC,
+> GitHub App asymmetric RS256 token exchange with caching, and workspace-scoped
+> GitHub installation and repository listing are implemented. Local data mirroring
+> (Phase 3) is next. See [Current limitations](#current-limitations).
 
 ## What this backend is
 
@@ -137,11 +138,10 @@ alembic revision --autogenerate -m "add ..."  # generate a new migration
 
 The following are **NOT implemented yet** (reserved for later phases):
 
-- GitHub OAuth / GitHub App installation (authorization model not decided)
-- GitHub API calls, webhooks, and synchronization
-- GitHub data models (repositories, issues, PRs, commits, releases, people)
-- Background jobs with product logic (workers/Celery)
-- Analytics, AI/LLM, work-item detection, dashboards
+- Local repository/PR/issue mirroring in PostgreSQL (Phase 3)
+- GitHub webhooks and sync engine (Phase 4)
+- Background jobs with product logic (workers/Redis)
+- Analytics, AI/LLM, work-item detection, dashboards (Phase 5)
 - Advanced RBAC, invitations, teams, billing, notifications
 
 ## Repository layout

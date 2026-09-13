@@ -29,6 +29,7 @@ The SaaS tenant boundary.
 |--------|------|-------|
 | `id` | UUID | primary key |
 | `name` | varchar(255) | not null |
+| `github_installation_id` | bigint | nullable, unique, indexed; links to GitHub App |
 | `created_at` / `updated_at` | timestamptz | server defaults |
 
 ### workspace_members
@@ -64,6 +65,7 @@ User 1 ──── * WorkspaceMember * ──── 1 Workspace
 
 ## Migrations
 
-The initial migration (`4663a065fb30`) creates `users`, `workspaces`, and
-`workspace_members`.
+1. `4663a065fb30`: Initial migration creating `users`, `workspaces`, and `workspace_members`.
+2. `b8c3d1e2f4a5`: Adds `github_installation_id` (bigint, unique, indexed) to `workspaces`.
+
 
