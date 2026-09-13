@@ -1,0 +1,16 @@
+# Runtime
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+pydantic-settings==2.7.0
+sqlalchemy[asyncio]==2.0.36
+alembic==1.14.0
+psycopg[binary]==3.2.3
+httpx==0.28.1
+redis==5.2.1
+PyJWT[crypto]==2.10.1
+
+# Development / CI
+pytest==8.3.4
+ruff==0.8.4
+mypy==1.13.0
