@@ -6,21 +6,21 @@ See `ENGINEERING_APPROACH.md` for the reasoning behind these choices.
 ## Current status
 
 - **Phase 1 (Identity & Workspace) implemented.** Supabase Auth is the external
-  identity provider; internal `User`, `Workspace`, and `WorkspaceMember` models.
+  identity provider; internal `User`, `Workspace`, and `WorkspaceMember` models with RBAC.
 - **Phase 2 (GitHub App Integration) implemented.** GitHub App asymmetric RS256
   authentication, short-lived 1-hour installation token exchange with caching,
   `github_installation_id` on workspaces, owner-only authorization, and repository
   listing via `GitHubClient`.
-- **Implemented endpoints:** `/health`, `GET /api/v1/me`, `POST /api/v1/workspaces`,
-  `GET /api/v1/workspaces`, `GET /api/v1/workspaces/{id}`,
-  `GET /api/v1/workspaces/{id}/github/install-url`,
-  `POST /api/v1/workspaces/{id}/github/connect`,
-  `DELETE /api/v1/workspaces/{id}/github/disconnect`,
-  `GET /api/v1/workspaces/{id}/github/repositories`.
-- **Migrations:** Initial migration (`4663a065fb30`), `github_installation_id`
-  migration (`b8c3d1e2f4a5`).
-- **Not implemented:** Local GitHub entity mirroring (Phase 3), webhooks and
-  synchronization (Phase 4), background workers, analytics (Phase 5).
+- **Phase 3 (Repository & PR Mirroring) implemented.** `Repository` and `PullRequest`
+  models in PostgreSQL with tracking management endpoints.
+- **Phase 4 (Dual-Sync Ingestion) implemented.** Historical paginated sync with `ON CONFLICT DO UPDATE`
+  idempotent upserts + real-time GitHub Webhook processing with HMAC-SHA256 signature verification.
+- **Phase 5 (Analytics Engine & Redis Caching) implemented.** Aggregated Cycle Time (p50, p90, avg),
+  weekly throughput, and contributor breakdown with resilient Redis cache-aside acceleration.
+- **Phase 6 (Asynchronous Task Queue & Worker) implemented.** HTTP 202 Accepted pattern for
+  long-running synchronization, Redis FIFO task queue with transparent in-process fallback,
+  dedicated background worker (`python -m app.workers.worker`), and job status polling (`/sync-jobs`).
+- **Live Deployment:** Production deployment on Render with automated GitHub Actions CI/CD.
 
 ## Technology stack
 

@@ -21,6 +21,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.pull_request import PullRequest
+    from app.models.sync_job import SyncJob
     from app.models.workspace import Workspace
 
 
@@ -53,5 +54,8 @@ class Repository(Base):
 
     workspace: Mapped["Workspace"] = relationship(back_populates="repositories")
     pull_requests: Mapped[list["PullRequest"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
+    sync_jobs: Mapped[list["SyncJob"]] = relationship(
         back_populates="repository", cascade="all, delete-orphan"
     )

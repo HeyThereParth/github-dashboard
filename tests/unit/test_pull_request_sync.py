@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from app.api.dependencies import get_accessible_workspace, get_owned_workspace
@@ -16,7 +16,6 @@ from app.models.workspace import Workspace
 from app.schemas.pull_request import (
     PullRequestListResponse,
     PullRequestResponse,
-    SyncResultResponse,
 )
 from app.services.github_service import GitHubNotConnectedError
 from app.services.repository_service import RepositoryNotFoundError
@@ -244,22 +243,34 @@ def test_sync_repository_route_success(
     client: TestClient,
     workspace_id: uuid.UUID,
     repo_id: uuid.UUID,
+    mock_repository: Repository,
 ) -> None:
-    with patch(
-        "app.api.v1.workspaces.sync_service.sync_repository_pull_requests",
-        new=AsyncMock(
-            return_value=SyncResultResponse(
-                repository_id=repo_id, synced_count=15, status="completed"
-            )
+    job_id = uuid.uuid4()
+    mock_job = MagicMock()
+    mock_job.id = job_id
+    mock_job.status = "queued"
+
+    with (
+        patch(
+            "app.api.v1.workspaces.repository_service.get_tracked_repository",
+            new=AsyncMock(return_value=mock_repository),
+        ),
+        patch(
+            "app.api.v1.workspaces.sync_job_repository.create",
+            new=AsyncMock(return_value=mock_job),
+        ),
+        patch(
+            "app.api.v1.workspaces.task_queue.enqueue_sync_job",
+            new=AsyncMock(return_value="redis"),
         ),
     ):
         url = f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/sync"
         response = client.post(url)
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
-        assert data["repository_id"] == str(repo_id)
-        assert data["synced_count"] == 15
-        assert data["status"] == "completed"
+        assert data["job_id"] == str(job_id)
+        assert data["status"] == "queued"
+        assert "enqueued" in data["message"].lower()
 
 
 def test_sync_repository_route_not_found(
@@ -268,7 +279,7 @@ def test_sync_repository_route_not_found(
     repo_id: uuid.UUID,
 ) -> None:
     with patch(
-        "app.api.v1.workspaces.sync_service.sync_repository_pull_requests",
+        "app.api.v1.workspaces.repository_service.get_tracked_repository",
         side_effect=RepositoryNotFoundError("Repository not found in this workspace"),
     ):
         url = f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/sync"

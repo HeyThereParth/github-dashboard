@@ -107,10 +107,25 @@ Requires `owner` role.
 
 ### POST /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/sync
 
-Triggers synchronization of all pull requests from GitHub and idempotently upserts them into PostgreSQL.
+Triggers asynchronous background synchronization of pull requests via Redis / worker queue.
 Requires `owner` role.
 
-- Response: `SyncResultResponse` (`repository_id`, `synced_count`, `status="completed"`).
+- Response: `202 Accepted` + `SyncJobCreateResponse` (`job_id`, `status="queued"`, `message`).
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/sync-jobs/{job_id}
+
+Polls the progress and status of a specific background sync job.
+Requires `member` or `owner` role.
+
+- Response: `SyncJobResponse` (`id`, `workspace_id`, `repository_id`, `status` [queued/processing/completed/failed], `total_synced`, `error_message`, `started_at`, `completed_at`, `created_at`, `updated_at`).
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/sync-jobs
+
+Lists recent background sync jobs for a tracked repository.
+Requires `member` or `owner` role.
+
+- Query params: `limit` (default 10, max 50).
+- Response: `[SyncJobResponse]`.
 
 ### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/pull-requests
 

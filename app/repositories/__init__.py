@@ -16,6 +16,10 @@ from app.repositories.repository_repository import (
     RepositoryRepository,
     repository_repository,
 )
+from app.repositories.sync_job_repository import (
+    SyncJobRepository,
+    sync_job_repository,
+)
 from app.repositories.user_repository import UserRepository, user_repository
 from app.repositories.workspace_repository import (
     WorkspaceRepository,
@@ -26,11 +30,13 @@ __all__ = [
     "AnalyticsRepository",
     "PullRequestRepository",
     "RepositoryRepository",
+    "SyncJobRepository",
     "UserRepository",
     "WorkspaceRepository",
     "analytics_repository",
     "pull_request_repository",
     "repository_repository",
+    "sync_job_repository",
     "user_repository",
     "workspace_repository",
 ]

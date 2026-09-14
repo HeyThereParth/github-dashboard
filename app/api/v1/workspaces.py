@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_accessible_workspace, get_current_user, get_owned_workspace
 from app.core.database import get_db
 from app.integrations.github.exceptions import (
-    GitHubAPIError,
     GitHubAppConfigError,
     GitHubAuthError,
     GitHubNotFoundError,
@@ -14,6 +13,7 @@ from app.integrations.github.exceptions import (
 )
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.repositories.sync_job_repository import sync_job_repository
 from app.schemas.github import (
     GitHubConnectRequest,
     GitHubInstallUrlResponse,
@@ -21,18 +21,22 @@ from app.schemas.github import (
 )
 from app.schemas.pull_request import (
     PullRequestListResponse,
-    SyncResultResponse,
 )
 from app.schemas.repository import (
     RepositoryResponse,
     RepositorySummary,
     RepositoryTrackRequest,
 )
+from app.schemas.sync_job import (
+    SyncJobCreateResponse,
+    SyncJobResponse,
+)
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceSummary
 from app.services.github_service import GitHubNotConnectedError, github_service
 from app.services.repository_service import RepositoryNotFoundError, repository_service
-from app.services.sync_service import RepositoryNotTrackedError, sync_service
+from app.services.sync_service import sync_service
 from app.services.workspace_service import workspace_service
+from app.workers.queue import task_queue
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -249,17 +253,27 @@ async def untrack_repository(
 
 @router.post(
     "/{workspace_id}/repositories/tracked/{repository_id}/sync",
-    response_model=SyncResultResponse,
-    status_code=status.HTTP_200_OK,
+    response_model=SyncJobCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def sync_repository(
     repository_id: uuid.UUID,
     workspace: Workspace = Depends(get_owned_workspace),
     db: AsyncSession = Depends(get_db),
-) -> SyncResultResponse:
-    """Trigger synchronization of pull requests for a tracked repository (Owner only)."""
+) -> SyncJobCreateResponse:
+    """Trigger asynchronous synchronization of pull requests (Owner only).
+
+    Enqueues the job into Redis / background worker and immediately returns
+    HTTP 202 Accepted with a job ID that can be polled for progress.
+    """
+    if workspace.github_installation_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workspace is not connected to GitHub",
+        )
+
     try:
-        return await sync_service.sync_repository_pull_requests(
+        repo = await repository_service.get_tracked_repository(
             db, workspace_id=workspace.id, repository_id=repository_id
         )
     except RepositoryNotFoundError as exc:
@@ -267,26 +281,91 @@ async def sync_repository(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
-    except RepositoryNotTrackedError as exc:
+
+    if not repo.is_tracked:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    except GitHubNotConnectedError as exc:
+            detail="Cannot sync a repository that is not tracked",
+        )
+
+    job = await sync_job_repository.create(
+        db,
+        workspace_id=workspace.id,
+        repository_id=repository_id,
+        status="queued",
+    )
+    await db.commit()
+
+    await task_queue.enqueue_sync_job(
+        job_id=job.id,
+        workspace_id=workspace.id,
+        repository_id=repository_id,
+    )
+
+    return SyncJobCreateResponse(
+        job_id=job.id,
+        status=job.status,
+        message="Synchronization task enqueued successfully",
+    )
+
+
+@router.get(
+    "/{workspace_id}/repositories/tracked/{repository_id}/sync-jobs/{job_id}",
+    response_model=SyncJobResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_sync_job(
+    repository_id: uuid.UUID,
+    job_id: uuid.UUID,
+    workspace: Workspace = Depends(get_accessible_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> SyncJobResponse:
+    """Get status and details for a specific sync job (Any workspace member)."""
+    try:
+        await repository_service.get_tracked_repository(
+            db, workspace_id=workspace.id, repository_id=repository_id
+        )
+    except RepositoryNotFoundError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
-    except GitHubRateLimitError as exc:
+
+    job = await sync_job_repository.get_by_id(db, job_id)
+    if job is None or job.repository_id != repository_id or job.workspace_id != workspace.id:
         raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(exc),
-        ) from exc
-    except GitHubAPIError as exc:
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sync job not found",
+        )
+    return SyncJobResponse.model_validate(job)
+
+
+@router.get(
+    "/{workspace_id}/repositories/tracked/{repository_id}/sync-jobs",
+    response_model=list[SyncJobResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def list_sync_jobs(
+    repository_id: uuid.UUID,
+    limit: int = Query(10, ge=1, le=50, description="Max jobs to return"),
+    workspace: Workspace = Depends(get_accessible_workspace),
+    db: AsyncSession = Depends(get_db),
+) -> list[SyncJobResponse]:
+    """List recent background sync jobs for a tracked repository (Any workspace member)."""
+    try:
+        await repository_service.get_tracked_repository(
+            db, workspace_id=workspace.id, repository_id=repository_id
+        )
+    except RepositoryNotFoundError as exc:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+    jobs = await sync_job_repository.list_for_repository(
+        db, repository_id=repository_id, limit=limit
+    )
+    return [SyncJobResponse.model_validate(job) for job in jobs]
 
 
 @router.get(

@@ -3,11 +3,11 @@
 Backend service for GitHub Intelligence — a SaaS application that ingests,
 organizes, and derives insights from GitHub data.
 
-> **Current status: Phase 2 (GitHub App Integration & Workspace Connection).**
-> Supabase Auth authentication, internal users, workspaces, membership RBAC,
-> GitHub App asymmetric RS256 token exchange with caching, and workspace-scoped
-> GitHub installation and repository listing are implemented. Local data mirroring
-> (Phase 3) is next. See [Current limitations](#current-limitations).
+> **Current status: Production Ready on Render with Background Task Queue.**
+> Features completed: Supabase Auth & RBAC (Phase 1), GitHub App Integration (Phase 2),
+> Repository & Pull Request Mirroring (Phase 3), Dual-Sync Ingestion with HMAC Webhooks (Phase 4),
+> Cycle Time & Throughput Analytics with Redis Cache-Aside (Phase 5), and Asynchronous
+> Task Queue with Background Worker (Phase 6). Live at `https://github-dashboard-xvea.onrender.com`.
 
 ## What this backend is
 
@@ -134,15 +134,10 @@ alembic upgrade head                          # apply
 alembic revision --autogenerate -m "add ..."  # generate a new migration
 ```
 
-## Current limitations
-
-The following are **NOT implemented yet** (reserved for later phases):
-
-- Local repository/PR/issue mirroring in PostgreSQL (Phase 3)
-- GitHub webhooks and sync engine (Phase 4)
-- Background jobs with product logic (workers/Redis)
-- Analytics, AI/LLM, work-item detection, dashboards (Phase 5)
-- Advanced RBAC, invitations, teams, billing, notifications
+## Roadmap & Future Enhancements
+- AI/LLM PR summaries and risk scoring
+- Advanced team invitations, role customization, and billing (Stripe)
+- Slack / Discord webhook alerts for engineering bottlenecks
 
 ## Repository layout
 
