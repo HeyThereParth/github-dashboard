@@ -299,9 +299,7 @@ def test_analytics_overview_route(
         "app.api.v1.analytics.analytics_service.get_overview_metrics",
         new=AsyncMock(return_value=overview_resp),
     ):
-        url = (
-            f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/analytics/overview"
-        )
+        url = f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/analytics/overview"
         response = client.get(url, params={"days": 30})
         assert response.status_code == 200
         data = response.json()
@@ -351,9 +349,7 @@ def test_analytics_authors_route(
         "app.api.v1.analytics.analytics_service.get_author_metrics",
         new=AsyncMock(return_value=authors_resp),
     ):
-        url = (
-            f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/analytics/authors"
-        )
+        url = f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/analytics/authors"
         response = client.get(url, params={"days": 30})
         assert response.status_code == 200
         data = response.json()
@@ -369,9 +365,7 @@ def test_analytics_overview_not_found(
         "app.api.v1.analytics.analytics_service.get_overview_metrics",
         side_effect=RepositoryNotFoundError("Repository not found in this workspace"),
     ):
-        url = (
-            f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/analytics/overview"
-        )
+        url = f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/analytics/overview"
         response = client.get(url)
         assert response.status_code == 404
         assert "Repository not found" in response.json()["detail"]

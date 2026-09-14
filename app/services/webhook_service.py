@@ -62,9 +62,7 @@ class WebhookService:
             return {"status": "ignored", "reason": "missing_pull_request_or_repository"}
 
         github_repo_id = int(repo_raw["id"])
-        tracked_repos = await self._repository_repo.list_by_github_id(
-            db, github_id=github_repo_id
-        )
+        tracked_repos = await self._repository_repo.list_by_github_id(db, github_id=github_repo_id)
 
         if not tracked_repos:
             logger.info(

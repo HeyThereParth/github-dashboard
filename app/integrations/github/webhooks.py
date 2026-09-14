@@ -21,7 +21,7 @@ def verify_webhook_signature(
     if not signature_header.startswith(prefix):
         return False
 
-    received_signature = signature_header[len(prefix):]
+    received_signature = signature_header[len(prefix) :]
     computed_signature = hmac.new(
         secret.encode("utf-8"),
         msg=payload_bytes,

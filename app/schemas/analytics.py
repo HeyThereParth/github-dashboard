@@ -24,9 +24,7 @@ class RepositoryMetricsResponse(BaseModel):
     open_prs: int
     merged_prs: int
     closed_unmerged_prs: int
-    merge_rate_percentage: float | None = Field(
-        None, description="Percentage of closed PRs merged"
-    )
+    merge_rate_percentage: float | None = Field(None, description="Percentage of closed PRs merged")
     cycle_time: CycleTimeMetrics
     cached: bool = Field(False, description="Whether this response was served from Redis cache")
 

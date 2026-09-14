@@ -40,9 +40,7 @@ class AnalyticsRepository:
             ).label("closed_unmerged_prs"),
             func.percentile_cont(0.50).within_group(duration_hours).label("p50_hours"),
             func.percentile_cont(0.90).within_group(duration_hours).label("p90_hours"),
-            func.avg(case((PullRequest.merged_at.is_not(None), duration_hours))).label(
-                "avg_hours"
-            ),
+            func.avg(case((PullRequest.merged_at.is_not(None), duration_hours))).label("avg_hours"),
         ).where(PullRequest.repository_id == repository_id)
 
         if days is not None:
@@ -68,9 +66,7 @@ class AnalyticsRepository:
         )
 
         closed_total = merged_prs + closed_unmerged_prs
-        merge_rate = (
-            round((merged_prs / closed_total) * 100.0, 1) if closed_total > 0 else None
-        )
+        merge_rate = round((merged_prs / closed_total) * 100.0, 1) if closed_total > 0 else None
 
         return {
             "total_prs": total_prs,
@@ -134,19 +130,16 @@ class AnalyticsRepository:
             func.extract("epoch", PullRequest.merged_at - PullRequest.github_created_at) / 3600.0
         )
 
-        stmt = (
-            select(
-                PullRequest.author_login,
-                func.count(PullRequest.id).label("total_prs"),
-                func.count(case((PullRequest.merged_at.is_not(None), 1))).label("merged_prs"),
-                func.avg(case((PullRequest.merged_at.is_not(None), duration_hours))).label(
-                    "avg_cycle_time_hours"
-                ),
-            )
-            .where(
-                PullRequest.repository_id == repository_id,
-                PullRequest.author_login.is_not(None),
-            )
+        stmt = select(
+            PullRequest.author_login,
+            func.count(PullRequest.id).label("total_prs"),
+            func.count(case((PullRequest.merged_at.is_not(None), 1))).label("merged_prs"),
+            func.avg(case((PullRequest.merged_at.is_not(None), duration_hours))).label(
+                "avg_cycle_time_hours"
+            ),
+        ).where(
+            PullRequest.repository_id == repository_id,
+            PullRequest.author_login.is_not(None),
         )
 
         if days is not None:

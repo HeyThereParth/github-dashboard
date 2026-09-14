@@ -43,6 +43,4 @@ async def handle_github_webhook(
             detail="Malformed JSON payload",
         ) from exc
 
-    return await webhook_service.process_github_event(
-        db, event=x_github_event, payload=payload
-    )
+    return await webhook_service.process_github_event(db, event=x_github_event, payload=payload)

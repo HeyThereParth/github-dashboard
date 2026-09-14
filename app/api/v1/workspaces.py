@@ -317,4 +317,3 @@ async def list_repository_pull_requests(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
-

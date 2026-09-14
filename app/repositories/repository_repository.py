@@ -27,9 +27,7 @@ class RepositoryRepository:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_by_github_id(
-        self, db: AsyncSession, *, github_id: int
-    ) -> list[Repository]:
+    async def list_by_github_id(self, db: AsyncSession, *, github_id: int) -> list[Repository]:
         """Find all tracked repositories mirroring a GitHub repository numeric ID."""
         stmt = select(Repository).where(
             Repository.github_id == github_id,

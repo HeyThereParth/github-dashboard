@@ -60,10 +60,7 @@ class PullRequestRepository:
         state: str | None = None,
     ) -> int:
         """Count total pull requests for a repository."""
-        stmt = (
-            select(func.count(PullRequest.id))
-            .where(PullRequest.repository_id == repository_id)
-        )
+        stmt = select(func.count(PullRequest.id)).where(PullRequest.repository_id == repository_id)
         if state is not None and state != "all":
             stmt = stmt.where(PullRequest.state == state)
 
