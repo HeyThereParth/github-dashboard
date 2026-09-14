@@ -131,6 +131,30 @@ Unauthenticated by user token; verified via GitHub `X-Hub-Signature-256` header 
   - `pull_request` (`opened`, `closed`, `synchronize`, `reopened`, `edited`): mirrors PR changes to Neon DB in real-time.
 - Response: `200 OK` + `{"status": "processed" | "pong" | "ignored", ...}`.
 
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/analytics/overview
+
+Returns aggregated engineering metrics (Cycle Time p50/p90/avg, volume, merge rate) with resilient Redis cache-aside acceleration.
+Requires `member` or `owner` role.
+
+- Query params: `days` (default 30, min 1, max 365, or omitted for all-time).
+- Response: `RepositoryMetricsResponse` (`total_prs`, `open_prs`, `merged_prs`, `closed_unmerged_prs`, `merge_rate_percentage`, `cycle_time`: `{"p50_hours", "p90_hours", "avg_hours"}`, `cached`: boolean).
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/analytics/throughput
+
+Returns weekly merged pull request counts for velocity timelines.
+Requires `member` or `owner` role.
+
+- Query params: `weeks` (default 8, min 1, max 52).
+- Response: `WeeklyThroughputResponse` (`weeks_analyzed`, `data`: `[{"week_start", "merged_count"}]`, `cached`: boolean).
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/analytics/authors
+
+Returns contributor-level pull request activity and average cycle time breakdown.
+Requires `member` or `owner` role.
+
+- Query params: `days` (default 30).
+- Response: `AuthorMetricsResponse` (`authors`: `[{"author_login", "total_prs", "merged_prs", "avg_cycle_time_hours"}]`, `cached`: boolean).
+
 ## Conventions
 
 - JSON bodies validated with Pydantic schemas (`app/schemas/`).

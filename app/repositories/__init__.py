@@ -4,6 +4,10 @@ Repositories own all database access and are the only layer that talks
 directly to the database.
 """
 
+from app.repositories.analytics_repository import (
+    AnalyticsRepository,
+    analytics_repository,
+)
 from app.repositories.pull_request_repository import (
     PullRequestRepository,
     pull_request_repository,
@@ -19,10 +23,12 @@ from app.repositories.workspace_repository import (
 )
 
 __all__ = [
+    "AnalyticsRepository",
     "PullRequestRepository",
     "RepositoryRepository",
     "UserRepository",
     "WorkspaceRepository",
+    "analytics_repository",
     "pull_request_repository",
     "repository_repository",
     "user_repository",
