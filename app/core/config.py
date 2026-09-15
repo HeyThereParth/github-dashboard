@@ -46,10 +46,20 @@ class Settings(BaseSettings):
     supabase_jwt_issuer: str | None = None
     supabase_jwt_audience: str = "authenticated"
 
+    # CORS: comma-separated browser origins allowed to call the API. The production
+    # frontend origin is appended here via the CORS_ORIGINS environment variable once
+    # it exists. An empty value allows no browser origin.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
     @property
     def is_production(self) -> bool:
         """Whether the application is running in a production environment."""
         return self.environment.lower() == "production"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """Allowed CORS origins parsed from the comma-separated ``CORS_ORIGINS`` setting."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

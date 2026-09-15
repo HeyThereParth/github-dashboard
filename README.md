@@ -82,6 +82,7 @@ See `.env.example` for the full documented set. Key variables:
 | `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
 | `GITHUB_*` | GitHub integration placeholders | none (empty) |
 | `SUPABASE_JWKS_URL`, `SUPABASE_JWT_ISSUER`, `SUPABASE_JWT_AUDIENCE` | Supabase Auth token verification | none (empty) / `authenticated` |
+| `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API | `http://localhost:5173,http://127.0.0.1:5173` |
 
 GitHub placeholders (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, etc.) exist for
 future configuration only; no real values are committed and no GitHub auth is
