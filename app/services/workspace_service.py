@@ -87,6 +87,10 @@ class WorkspaceService:
         """Update the GitHub installation ID associated with a workspace."""
         workspace.github_installation_id = installation_id
         await db.flush()
+        # The flush emits an UPDATE without RETURNING, so the database-generated
+        # ``updated_at`` (onupdate=func.now()) is expired on the instance. Reload it
+        # inside the active async session so callers can serialize the ORM object.
+        await db.refresh(workspace, attribute_names=["updated_at"])
         return workspace
 
 
