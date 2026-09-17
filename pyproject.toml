@@ -25,3 +25,7 @@ warn_unused_ignores = true
 module = ["tests", "tests.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+[tool.coverage.run]
+relative_files = true
+source = ["app"]
