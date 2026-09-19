@@ -14,9 +14,13 @@ from app.repositories.repository_repository import (
     repository_repository,
 )
 from app.schemas.analytics import (
+    ActivityTrendItem,
+    ActivityTrendResponse,
     AuthorMetricsItem,
     AuthorMetricsResponse,
     CycleTimeMetrics,
+    CycleTimeTrendItem,
+    CycleTimeTrendResponse,
     RepositoryMetricsResponse,
     WeeklyThroughputItem,
     WeeklyThroughputResponse,
@@ -123,6 +127,86 @@ class AnalyticsService:
         await self._redis.set(cache_key, response.model_dump_json(), ttl_seconds=900)
         return response
 
+    async def get_activity_trend(
+        self,
+        db: AsyncSession,
+        *,
+        workspace_id: uuid.UUID,
+        repository_id: uuid.UUID | None = None,
+        days: int = 30,
+    ) -> ActivityTrendResponse:
+        """Fetch daily created-vs-merged PR counts with cache-aside acceleration."""
+        if repository_id is not None:
+            await self._verify_repository_access(
+                db, workspace_id=workspace_id, repository_id=repository_id
+            )
+            cache_key = (
+                f"analytics:activity:workspace:{workspace_id}:repo:{repository_id}:days:{days}"
+            )
+        else:
+            cache_key = f"analytics:activity:workspace:{workspace_id}:days:{days}"
+
+        cached_data = await self._redis.get(cache_key)
+        if cached_data:
+            cached_resp = ActivityTrendResponse.model_validate_json(cached_data)
+            cached_resp.cached = True
+            return cached_resp
+
+        raw_days = await self._analytics_repo.get_daily_activity(
+            db, repository_id=repository_id, workspace_id=workspace_id, days=days
+        )
+
+        response = ActivityTrendResponse(
+            workspace_id=workspace_id,
+            repository_id=repository_id,
+            days_analyzed=days,
+            data=[ActivityTrendItem(**item) for item in raw_days],
+            cached=False,
+        )
+
+        await self._redis.set(cache_key, response.model_dump_json(), ttl_seconds=900)
+        return response
+
+    async def get_cycle_time_trend(
+        self,
+        db: AsyncSession,
+        *,
+        workspace_id: uuid.UUID,
+        repository_id: uuid.UUID | None = None,
+        weeks: int = 12,
+    ) -> CycleTimeTrendResponse:
+        """Fetch weekly cycle-time percentiles with cache-aside acceleration."""
+        if repository_id is not None:
+            await self._verify_repository_access(
+                db, workspace_id=workspace_id, repository_id=repository_id
+            )
+            cache_key = (
+                f"analytics:cycletime:workspace:{workspace_id}:repo:{repository_id}:weeks:{weeks}"
+            )
+        else:
+            cache_key = f"analytics:cycletime:workspace:{workspace_id}:weeks:{weeks}"
+
+        cached_data = await self._redis.get(cache_key)
+        if cached_data:
+            cached_resp = CycleTimeTrendResponse.model_validate_json(cached_data)
+            cached_resp.cached = True
+            return cached_resp
+
+        raw_weeks = await self._analytics_repo.get_cycle_time_trend(
+            db, repository_id=repository_id, workspace_id=workspace_id, weeks=weeks
+        )
+
+        response = CycleTimeTrendResponse(
+            workspace_id=workspace_id,
+            repository_id=repository_id,
+            weeks_analyzed=weeks,
+            data=[CycleTimeTrendItem(**item) for item in raw_weeks],
+            cached=False,
+        )
+
+        await self._redis.set(cache_key, response.model_dump_json(), ttl_seconds=900)
+        return response
+
     async def get_author_metrics(
         self,
         db: AsyncSession,
@@ -162,6 +246,8 @@ class AnalyticsService:
         await self._redis.delete_prefix(f"analytics:overview:{repository_id}")
         await self._redis.delete_prefix(f"analytics:throughput:{repository_id}")
         await self._redis.delete_prefix(f"analytics:authors:{repository_id}")
+        await self._redis.delete_prefix(f"analytics:activity:{repository_id}")
+        await self._redis.delete_prefix(f"analytics:cycletime:{repository_id}")
 
 
 analytics_service = AnalyticsService()

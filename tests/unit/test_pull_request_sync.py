@@ -137,11 +137,14 @@ def test_sync_service_success(
         mock_pr_repo = AsyncMock()
         mock_pr_repo.upsert_batch.return_value = 1
 
+        mock_analytics = AsyncMock()
+
         service = SyncService(
             pull_request_repo=mock_pr_repo,
             repository_repo=mock_repo_repo,
             workspace_repo=mock_ws_repo,
             client=mock_client,
+            analytics=mock_analytics,
         )
 
         result = await service.sync_repository_pull_requests(
@@ -152,6 +155,8 @@ def test_sync_service_success(
         assert result.synced_count == 1
         assert result.status == "completed"
         mock_pr_repo.upsert_batch.assert_called_once()
+        # Fresh sync data must invalidate cached analytics for the repository
+        mock_analytics.invalidate_repository_cache.assert_called_once_with(repo_id)
 
     asyncio.run(_run())
 

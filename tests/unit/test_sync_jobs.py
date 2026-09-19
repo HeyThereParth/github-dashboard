@@ -8,15 +8,17 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.api.dependencies import get_accessible_workspace, get_owned_workspace
+from app.api.dependencies import get_accessible_workspace, get_current_user, get_owned_workspace
 from app.main import app
 from app.models.repository import Repository
 from app.models.sync_job import SyncJob
+from app.models.user import User
 from app.models.workspace import Workspace
 from app.repositories.sync_job_repository import SyncJobRepository
 from app.schemas.pull_request import SyncResultResponse
 from app.workers.queue import TaskQueue
 from app.workers.tasks.sync_task import run_sync_job
+from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from redis.exceptions import ConnectionError as RedisConnectionError
 
@@ -34,6 +36,20 @@ def repo_id() -> uuid.UUID:
 @pytest.fixture
 def job_id() -> uuid.UUID:
     return uuid.uuid4()
+
+
+@pytest.fixture
+def mock_user() -> User:
+    now = datetime.now(UTC)
+    user = User(
+        auth_provider_user_id="auth-provider-user-1",
+        email="test@example.com",
+        name="Test User",
+    )
+    user.id = uuid.uuid4()
+    user.created_at = now
+    user.updated_at = now
+    return user
 
 
 @pytest.fixture
@@ -85,9 +101,10 @@ def mock_sync_job(workspace_id: uuid.UUID, repo_id: uuid.UUID, job_id: uuid.UUID
 
 
 @pytest.fixture
-def client(mock_workspace: Workspace) -> Iterator[TestClient]:
+def client(mock_workspace: Workspace, mock_user: User) -> Iterator[TestClient]:
     app.dependency_overrides[get_owned_workspace] = lambda: mock_workspace
     app.dependency_overrides[get_accessible_workspace] = lambda: mock_workspace
+    app.dependency_overrides[get_current_user] = lambda: mock_user
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -370,3 +387,271 @@ def test_list_sync_jobs_route(
         assert len(data) == 1
         assert data[0]["id"] == str(mock_sync_job.id)
         assert data[0]["status"] == "queued"
+
+
+def test_sync_job_repository_get_active_job(repo_id: uuid.UUID, mock_sync_job: SyncJob) -> None:
+    async def _run() -> None:
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_sync_job
+        mock_db.execute.return_value = mock_result
+
+        repo = SyncJobRepository()
+        active = await repo.get_active_job_for_repository(mock_db, repository_id=repo_id)
+        assert active is not None
+        assert active.id == mock_sync_job.id
+        assert active.status == "queued"
+
+    asyncio.run(_run())
+
+
+def test_get_repository_sync_job_endpoint_queued(
+    client: TestClient,
+    job_id: uuid.UUID,
+    mock_sync_job: SyncJob,
+    mock_workspace: Workspace,
+) -> None:
+    with (
+        patch(
+            "app.api.v1.repositories.sync_job_repository.get_by_id",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+        patch(
+            "app.api.v1.repositories.get_accessible_workspace",
+            new=AsyncMock(return_value=mock_workspace),
+        ),
+    ):
+        url = f"/api/v1/repositories/sync-jobs/{job_id}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(job_id)
+        assert data["job_id"] == str(job_id)
+        assert data["status"] == "queued"
+        assert data["total_synced"] == 0
+        assert data["error_message"] is None
+
+
+def test_get_repository_sync_job_endpoint_processing(
+    client: TestClient,
+    job_id: uuid.UUID,
+    mock_sync_job: SyncJob,
+    mock_workspace: Workspace,
+) -> None:
+    mock_sync_job.status = "processing"
+    mock_sync_job.started_at = datetime.now(UTC)
+
+    with (
+        patch(
+            "app.api.v1.repositories.sync_job_repository.get_by_id",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+        patch(
+            "app.api.v1.repositories.get_accessible_workspace",
+            new=AsyncMock(return_value=mock_workspace),
+        ),
+    ):
+        url = f"/api/v1/repositories/sync-jobs/{job_id}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(job_id)
+        assert data["job_id"] == str(job_id)
+        assert data["status"] == "processing"
+        assert data["started_at"] is not None
+
+
+def test_get_repository_sync_job_endpoint_completed(
+    client: TestClient,
+    job_id: uuid.UUID,
+    mock_sync_job: SyncJob,
+    mock_workspace: Workspace,
+) -> None:
+    mock_sync_job.status = "completed"
+    mock_sync_job.total_synced = 42
+    mock_sync_job.completed_at = datetime.now(UTC)
+
+    with (
+        patch(
+            "app.api.v1.repositories.sync_job_repository.get_by_id",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+        patch(
+            "app.api.v1.repositories.get_accessible_workspace",
+            new=AsyncMock(return_value=mock_workspace),
+        ),
+    ):
+        url = f"/api/v1/repositories/sync-jobs/{job_id}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(job_id)
+        assert data["job_id"] == str(job_id)
+        assert data["status"] == "completed"
+        assert data["total_synced"] == 42
+        assert data["completed_at"] is not None
+
+
+def test_get_repository_sync_job_endpoint_failed(
+    client: TestClient,
+    job_id: uuid.UUID,
+    mock_sync_job: SyncJob,
+    mock_workspace: Workspace,
+) -> None:
+    mock_sync_job.status = "failed"
+    mock_sync_job.error_message = "GitHub API rate limit exceeded"
+    mock_sync_job.completed_at = datetime.now(UTC)
+
+    with (
+        patch(
+            "app.api.v1.repositories.sync_job_repository.get_by_id",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+        patch(
+            "app.api.v1.repositories.get_accessible_workspace",
+            new=AsyncMock(return_value=mock_workspace),
+        ),
+    ):
+        url = f"/api/v1/repositories/sync-jobs/{job_id}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(job_id)
+        assert data["job_id"] == str(job_id)
+        assert data["status"] == "failed"
+        assert data["error_message"] == "GitHub API rate limit exceeded"
+
+
+def test_get_repository_sync_job_endpoint_not_found(
+    client: TestClient,
+    job_id: uuid.UUID,
+) -> None:
+    with patch(
+        "app.api.v1.repositories.sync_job_repository.get_by_id",
+        new=AsyncMock(return_value=None),
+    ):
+        url = f"/api/v1/repositories/sync-jobs/{job_id}"
+        response = client.get(url)
+        assert response.status_code == 404
+        assert "Sync job not found" in response.json()["detail"]
+
+
+def test_get_repository_sync_job_endpoint_unauthorized(
+    client: TestClient,
+    job_id: uuid.UUID,
+    mock_sync_job: SyncJob,
+) -> None:
+    with (
+        patch(
+            "app.api.v1.repositories.sync_job_repository.get_by_id",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+        patch(
+            "app.api.v1.repositories.get_accessible_workspace",
+            side_effect=HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this workspace",
+            ),
+        ),
+    ):
+        url = f"/api/v1/repositories/sync-jobs/{job_id}"
+        response = client.get(url)
+        assert response.status_code == 403
+        assert "You do not have access to this workspace" in response.json()["detail"]
+
+
+def test_sync_repository_alias_route(
+    client: TestClient,
+    workspace_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    job_id: uuid.UUID,
+    mock_repository: Repository,
+    mock_sync_job: SyncJob,
+) -> None:
+    mock_sync_job.status = "queued"
+    with (
+        patch(
+            "app.api.v1.workspaces.repository_service.get_tracked_repository",
+            new=AsyncMock(return_value=mock_repository),
+        ),
+        patch(
+            "app.api.v1.workspaces.sync_job_repository.get_active_job_for_repository",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.api.v1.workspaces.sync_job_repository.create",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+        patch(
+            "app.api.v1.workspaces.task_queue.enqueue_sync_job",
+            new=AsyncMock(return_value="redis"),
+        ),
+    ):
+        url = f"/api/v1/workspaces/{workspace_id}/repositories/{repo_id}/sync"
+        response = client.post(url)
+        assert response.status_code == 202
+        data = response.json()
+        assert data["job_id"] == str(job_id)
+        assert data["status"] == "queued"
+        assert "enqueued" in data["message"].lower()
+
+
+def test_sync_repository_duplicate_in_progress_guard(
+    client: TestClient,
+    workspace_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    job_id: uuid.UUID,
+    mock_repository: Repository,
+    mock_sync_job: SyncJob,
+) -> None:
+    mock_sync_job.status = "processing"
+    mock_create = AsyncMock()
+    mock_enqueue = AsyncMock()
+
+    with (
+        patch(
+            "app.api.v1.workspaces.repository_service.get_tracked_repository",
+            new=AsyncMock(return_value=mock_repository),
+        ),
+        patch(
+            "app.api.v1.workspaces.sync_job_repository.get_active_job_for_repository",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+        patch("app.api.v1.workspaces.sync_job_repository.create", new=mock_create),
+        patch("app.api.v1.workspaces.task_queue.enqueue_sync_job", new=mock_enqueue),
+    ):
+        url = f"/api/v1/workspaces/{workspace_id}/repositories/tracked/{repo_id}/sync"
+        response = client.post(url)
+        assert response.status_code == 202
+        data = response.json()
+        assert data["job_id"] == str(job_id)
+        assert data["status"] == "processing"
+        assert "already in progress" in data["message"].lower()
+        mock_create.assert_not_called()
+        mock_enqueue.assert_not_called()
+
+
+def test_get_sync_job_route_alias(
+    client: TestClient,
+    workspace_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    job_id: uuid.UUID,
+    mock_repository: Repository,
+    mock_sync_job: SyncJob,
+) -> None:
+    with (
+        patch(
+            "app.api.v1.workspaces.repository_service.get_tracked_repository",
+            new=AsyncMock(return_value=mock_repository),
+        ),
+        patch(
+            "app.api.v1.workspaces.sync_job_repository.get_by_id",
+            new=AsyncMock(return_value=mock_sync_job),
+        ),
+    ):
+        url = f"/api/v1/workspaces/{workspace_id}/repositories/{repo_id}/sync-jobs/{job_id}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(job_id)
+        assert data["job_id"] == str(job_id)

@@ -57,6 +57,25 @@ class SyncJobRepository:
         result = await db.execute(stmt)
         return result.scalars().all()
 
+    async def get_active_job_for_repository(
+        self,
+        db: AsyncSession,
+        *,
+        repository_id: uuid.UUID,
+    ) -> SyncJob | None:
+        """Find an in-flight sync job (queued or processing) for a repository."""
+        stmt = (
+            select(SyncJob)
+            .where(
+                SyncJob.repository_id == repository_id,
+                SyncJob.status.in_(["queued", "processing"]),
+            )
+            .order_by(desc(SyncJob.created_at))
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def mark_processing(
         self,
         db: AsyncSession,

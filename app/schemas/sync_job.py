@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class SyncJobCreateResponse(BaseModel):
@@ -30,5 +30,11 @@ class SyncJobResponse(BaseModel):
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def job_id(self) -> uuid.UUID:
+        """Alias for id so frontend polling contracts reading job_id or id both succeed."""
+        return self.id
 
     model_config = ConfigDict(from_attributes=True)

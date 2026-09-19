@@ -98,6 +98,7 @@ def test_webhook_service_pull_request_processed() -> None:
         service = WebhookService(
             repository_repo=mock_repo_repo,
             pull_request_repo=mock_pr_repo,
+            analytics=AsyncMock(),
         )
 
         payload = {
@@ -124,6 +125,62 @@ def test_webhook_service_pull_request_processed() -> None:
         assert result["action"] == "opened"
         assert result["pr_number"] == 5
         mock_pr_repo.upsert_batch.assert_called_once()
+
+    asyncio.run(_run())
+
+
+def test_webhook_service_invalidates_analytics_cache() -> None:
+    import asyncio
+
+    async def _run() -> None:
+        mock_db = AsyncMock()
+        mock_repo_repo = AsyncMock()
+        mock_pr_repo = AsyncMock()
+        mock_analytics = AsyncMock()
+
+        repo = Repository(
+            workspace_id=uuid.uuid4(),
+            github_id=999,
+            node_id="R_123",
+            name="github-dashboard",
+            full_name="HeyThereParth/github-dashboard",
+            owner_login="HeyThereParth",
+            private=False,
+            html_url="https://github.com/HeyThereParth/github-dashboard",
+            default_branch="main",
+            is_tracked=True,
+        )
+        repo.id = uuid.uuid4()
+        mock_repo_repo.list_by_github_id.return_value = [repo]
+        mock_pr_repo.upsert_batch.return_value = 1
+
+        service = WebhookService(
+            repository_repo=mock_repo_repo,
+            pull_request_repo=mock_pr_repo,
+            analytics=mock_analytics,
+        )
+
+        payload = {
+            "action": "closed",
+            "repository": {"id": 999, "name": "github-dashboard"},
+            "pull_request": {
+                "id": 888,
+                "node_id": "PR_888",
+                "number": 5,
+                "title": "Add webhook support",
+                "state": "closed",
+                "draft": False,
+                "user": {"login": "octocat"},
+                "html_url": "https://github.com/HeyThereParth/github-dashboard/pull/5",
+                "merged_at": "2024-03-01T15:00:00Z",
+                "closed_at": "2024-03-01T15:00:00Z",
+                "created_at": "2024-03-01T12:00:00Z",
+                "updated_at": "2024-03-01T15:00:00Z",
+            },
+        }
+
+        await service.process_github_event(mock_db, event="pull_request", payload=payload)
+        mock_analytics.invalidate_repository_cache.assert_called_once_with(repo.id)
 
     asyncio.run(_run())
 

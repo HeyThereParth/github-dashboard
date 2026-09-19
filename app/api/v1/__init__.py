@@ -30,6 +30,7 @@ for sub_router in (
     people.router,
     work.router,
     analytics.router,
+    analytics.workspace_router,
     webhooks.router,
     sync.router,
 ):

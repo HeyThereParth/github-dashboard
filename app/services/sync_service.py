@@ -22,6 +22,7 @@ from app.schemas.pull_request import (
     PullRequestResponse,
     SyncResultResponse,
 )
+from app.services.analytics_service import AnalyticsService, analytics_service
 from app.services.github_service import GitHubNotConnectedError
 from app.services.repository_service import RepositoryNotFoundError
 
@@ -43,11 +44,13 @@ class SyncService:
         repository_repo: RepositoryRepository = repository_repository,
         workspace_repo: WorkspaceRepository = workspace_repository,
         client: GitHubClient = github_client,
+        analytics: AnalyticsService = analytics_service,
     ) -> None:
         self._pull_request_repo = pull_request_repo
         self._repository_repo = repository_repo
         self._workspace_repo = workspace_repo
         self._client = client
+        self._analytics = analytics
 
     async def sync_repository_pull_requests(
         self,
@@ -87,6 +90,9 @@ class SyncService:
             repository_id=repo.id,
             pull_requests=prs_data,
         )
+
+        # 5. Fresh PR data invalidates cached analytics (soft-fails if Redis is offline)
+        await self._analytics.invalidate_repository_cache(repo.id)
 
         return SyncResultResponse(
             repository_id=repo.id,

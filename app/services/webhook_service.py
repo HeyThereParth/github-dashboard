@@ -14,6 +14,7 @@ from app.repositories.repository_repository import (
     RepositoryRepository,
     repository_repository,
 )
+from app.services.analytics_service import AnalyticsService, analytics_service
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,11 @@ class WebhookService:
         self,
         repository_repo: RepositoryRepository = repository_repository,
         pull_request_repo: PullRequestRepository = pull_request_repository,
+        analytics: AnalyticsService = analytics_service,
     ) -> None:
         self._repository_repo = repository_repo
         self._pull_request_repo = pull_request_repo
+        self._analytics = analytics
 
     async def process_github_event(
         self,
@@ -79,6 +82,8 @@ class WebhookService:
                 repository_id=repo.id,
                 pull_requests=[pr_data],
             )
+            # Fresh PR data invalidates cached analytics (soft-fails if Redis is offline)
+            await self._analytics.invalidate_repository_cache(repo.id)
 
         logger.info(
             "Processed pull_request event '%s' for PR #%d across %d workspace repositories",

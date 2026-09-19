@@ -256,6 +256,11 @@ async def untrack_repository(
     response_model=SyncJobCreateResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
+@router.post(
+    "/{workspace_id}/repositories/{repository_id}/sync",
+    response_model=SyncJobCreateResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def sync_repository(
     repository_id: uuid.UUID,
     workspace: Workspace = Depends(get_owned_workspace),
@@ -288,6 +293,18 @@ async def sync_repository(
             detail="Cannot sync a repository that is not tracked",
         )
 
+    # Small safe guard: if an active sync job is already in flight (queued/processing),
+    # return the existing job so the frontend polls it without spawning duplicate work.
+    active_job = await sync_job_repository.get_active_job_for_repository(
+        db, repository_id=repository_id
+    )
+    if active_job is not None:
+        return SyncJobCreateResponse(
+            job_id=active_job.id,
+            status=active_job.status,
+            message="Synchronization task already in progress",
+        )
+
     job = await sync_job_repository.create(
         db,
         workspace_id=workspace.id,
@@ -311,6 +328,11 @@ async def sync_repository(
 
 @router.get(
     "/{workspace_id}/repositories/tracked/{repository_id}/sync-jobs/{job_id}",
+    response_model=SyncJobResponse,
+    status_code=status.HTTP_200_OK,
+)
+@router.get(
+    "/{workspace_id}/repositories/{repository_id}/sync-jobs/{job_id}",
     response_model=SyncJobResponse,
     status_code=status.HTTP_200_OK,
 )
@@ -342,6 +364,11 @@ async def get_sync_job(
 
 @router.get(
     "/{workspace_id}/repositories/tracked/{repository_id}/sync-jobs",
+    response_model=list[SyncJobResponse],
+    status_code=status.HTTP_200_OK,
+)
+@router.get(
+    "/{workspace_id}/repositories/{repository_id}/sync-jobs",
     response_model=list[SyncJobResponse],
     status_code=status.HTTP_200_OK,
 )

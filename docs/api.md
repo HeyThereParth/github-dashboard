@@ -160,7 +160,23 @@ Returns weekly merged pull request counts for velocity timelines.
 Requires `member` or `owner` role.
 
 - Query params: `weeks` (default 8, min 1, max 52).
-- Response: `WeeklyThroughputResponse` (`weeks_analyzed`, `data`: `[{"week_start", "merged_count"}]`, `cached`: boolean).
+- Response: `WeeklyThroughputResponse` (`weeks_analyzed`, `data`: `[{"week_start", "merged_count", "is_partial"}]`, `cached`). The series is zero-filled — weeks with no merges are included with `merged_count: 0`; `is_partial` marks the in-progress week.
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/analytics/activity
+
+Returns zero-filled daily created-vs-merged PR counts for activity trend charts.
+Requires `member` or `owner` role.
+
+- Query params: `days` (default 30, min 1, max 365).
+- Response: `ActivityTrendResponse` (`days_analyzed`, `data`: `[{"day", "created_count", "merged_count"}]`, `cached`).
+
+### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/analytics/cycle-time-trend
+
+Returns weekly cycle-time percentiles (p50/p90/avg in hours, bucketed by merge date) for engineering-pace trend charts.
+Requires `member` or `owner` role.
+
+- Query params: `weeks` (default 12, min 1, max 52).
+- Response: `CycleTimeTrendResponse` (`weeks_analyzed`, `data`: `[{"week_start", "p50_hours", "p90_hours", "avg_hours", "is_partial"}]`, `cached`). Weeks with no merges carry `null` percentiles.
 
 ### GET /api/v1/workspaces/{workspace_id}/repositories/tracked/{repository_id}/analytics/authors
 
