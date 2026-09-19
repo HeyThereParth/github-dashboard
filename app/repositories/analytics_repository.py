@@ -40,9 +40,7 @@ def _bucket_key(value: Any) -> datetime | None:
     return value
 
 
-def fill_week_counts(
-    counts: dict[datetime, int], starts: list[datetime]
-) -> list[dict[str, Any]]:
+def fill_week_counts(counts: dict[datetime, int], starts: list[datetime]) -> list[dict[str, Any]]:
     """Build a zero-filled weekly merged-count series; the newest week is partial."""
     last_index = len(starts) - 1
     return [
@@ -179,9 +177,9 @@ class AnalyticsRepository:
         # timestamptz filter needs an aware datetime; buckets above stay naive.
         first_start = starts[0].replace(tzinfo=UTC)
 
-        week_bucket = func.date_trunc(
-            "week", func.timezone("UTC", PullRequest.merged_at)
-        ).label("week_start")
+        week_bucket = func.date_trunc("week", func.timezone("UTC", PullRequest.merged_at)).label(
+            "week_start"
+        )
 
         stmt = (
             select(
@@ -222,9 +220,9 @@ class AnalyticsRepository:
         created_bucket = func.date_trunc(
             "day", func.timezone("UTC", PullRequest.github_created_at)
         ).label("day")
-        merged_bucket = func.date_trunc(
-            "day", func.timezone("UTC", PullRequest.merged_at)
-        ).label("day")
+        merged_bucket = func.date_trunc("day", func.timezone("UTC", PullRequest.merged_at)).label(
+            "day"
+        )
 
         created_stmt = (
             select(
@@ -254,19 +252,17 @@ class AnalyticsRepository:
             created_stmt = created_stmt.where(PullRequest.repository_id == repository_id)
             merged_stmt = merged_stmt.where(PullRequest.repository_id == repository_id)
         elif workspace_id is not None:
-            created_stmt = (
-                created_stmt.join(Repository, PullRequest.repository_id == Repository.id)
-                .where(
-                    Repository.workspace_id == workspace_id,
-                    Repository.is_tracked.is_(True),
-                )
+            created_stmt = created_stmt.join(
+                Repository, PullRequest.repository_id == Repository.id
+            ).where(
+                Repository.workspace_id == workspace_id,
+                Repository.is_tracked.is_(True),
             )
-            merged_stmt = (
-                merged_stmt.join(Repository, PullRequest.repository_id == Repository.id)
-                .where(
-                    Repository.workspace_id == workspace_id,
-                    Repository.is_tracked.is_(True),
-                )
+            merged_stmt = merged_stmt.join(
+                Repository, PullRequest.repository_id == Repository.id
+            ).where(
+                Repository.workspace_id == workspace_id,
+                Repository.is_tracked.is_(True),
             )
 
         created_result = await db.execute(created_stmt)
@@ -303,12 +299,12 @@ class AnalyticsRepository:
         starts = week_bucket_starts(now, weeks)
         first_start = starts[0].replace(tzinfo=UTC)
 
-        duration_hours = func.extract(
-            "epoch", PullRequest.merged_at - PullRequest.github_created_at
-        ) / 3600.0
-        week_bucket = func.date_trunc(
-            "week", func.timezone("UTC", PullRequest.merged_at)
-        ).label("week_start")
+        duration_hours = (
+            func.extract("epoch", PullRequest.merged_at - PullRequest.github_created_at) / 3600.0
+        )
+        week_bucket = func.date_trunc("week", func.timezone("UTC", PullRequest.merged_at)).label(
+            "week_start"
+        )
 
         stmt = (
             select(
@@ -340,15 +336,9 @@ class AnalyticsRepository:
             if key is None:
                 continue
             rows[key] = {
-                "p50_hours": round(float(row.p50_hours), 2)
-                if row.p50_hours is not None
-                else None,
-                "p90_hours": round(float(row.p90_hours), 2)
-                if row.p90_hours is not None
-                else None,
-                "avg_hours": round(float(row.avg_hours), 2)
-                if row.avg_hours is not None
-                else None,
+                "p50_hours": round(float(row.p50_hours), 2) if row.p50_hours is not None else None,
+                "p90_hours": round(float(row.p90_hours), 2) if row.p90_hours is not None else None,
+                "avg_hours": round(float(row.avg_hours), 2) if row.avg_hours is not None else None,
             }
 
         return fill_week_percentiles(rows, starts)

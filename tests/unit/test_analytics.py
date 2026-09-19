@@ -979,9 +979,7 @@ def test_analytics_service_workspace_activity_repo_filtering(
 
         assert result.workspace_id == workspace_id
         assert result.repository_id == repo_id
-        expected_cache_key = (
-            f"analytics:activity:workspace:{workspace_id}:repo:{repo_id}:days:14"
-        )
+        expected_cache_key = f"analytics:activity:workspace:{workspace_id}:repo:{repo_id}:days:14"
         mock_redis.set.assert_called_once()
         assert mock_redis.set.call_args[0][0] == expected_cache_key
 
@@ -1055,9 +1053,7 @@ def test_analytics_service_workspace_cycle_time_repo_filtering(
 
         assert result.workspace_id == workspace_id
         assert result.repository_id == repo_id
-        expected_cache_key = (
-            f"analytics:cycletime:workspace:{workspace_id}:repo:{repo_id}:weeks:8"
-        )
+        expected_cache_key = f"analytics:cycletime:workspace:{workspace_id}:repo:{repo_id}:weeks:8"
         mock_redis.set.assert_called_once()
         assert mock_redis.set.call_args[0][0] == expected_cache_key
 
@@ -1131,9 +1127,7 @@ def test_get_daily_activity_empty_dataset_zero_filled(
         mock_db.execute.return_value = mock_result
 
         repo = AnalyticsRepository()
-        days_result = await repo.get_daily_activity(
-            mock_db, workspace_id=workspace_id, days=7
-        )
+        days_result = await repo.get_daily_activity(mock_db, workspace_id=workspace_id, days=7)
 
         assert len(days_result) == 7
         for item in days_result:
@@ -1154,9 +1148,7 @@ def test_get_cycle_time_trend_empty_dataset_null_metrics(
         mock_db.execute.return_value = mock_result
 
         repo = AnalyticsRepository()
-        trend_result = await repo.get_cycle_time_trend(
-            mock_db, workspace_id=workspace_id, weeks=4
-        )
+        trend_result = await repo.get_cycle_time_trend(mock_db, workspace_id=workspace_id, weeks=4)
 
         assert len(trend_result) == 4
         for item in trend_result:
