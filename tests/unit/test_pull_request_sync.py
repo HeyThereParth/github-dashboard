@@ -261,6 +261,10 @@ def test_sync_repository_route_success(
             new=AsyncMock(return_value=mock_repository),
         ),
         patch(
+            "app.api.v1.workspaces.sync_job_repository.get_active_job_for_repository",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
             "app.api.v1.workspaces.sync_job_repository.create",
             new=AsyncMock(return_value=mock_job),
         ),
