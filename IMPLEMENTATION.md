@@ -184,8 +184,9 @@ entities are computed and owned locally.
 - Database uniqueness protects identity (`auth_provider_user_id`) and membership
   (`workspace_id, user_id`).
 - CORS is configured for the local frontend development origins
-  (`http://localhost:5173`, `http://127.0.0.1:5173`) and is controlled by the
-  `CORS_ORIGINS` setting; production origins are appended there when they exist.
+  (`http://localhost:5173`, `http://127.0.0.1:5173`) and the production frontend
+  (`https://github-intelligence.netlify.app`), controlled by the `CORS_ORIGINS`
+  setting.
 - TLS termination and rate limiting will be added when network exposure is decided.
 
 ## Observability

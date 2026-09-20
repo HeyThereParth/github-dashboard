@@ -47,9 +47,10 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str = "authenticated"
 
     # CORS: comma-separated browser origins allowed to call the API. The production
-    # frontend origin is appended here via the CORS_ORIGINS environment variable once
-    # it exists. An empty value allows no browser origin.
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # frontend origin (https://github-intelligence.netlify.app) is included in the
+    # default; extend or override via the CORS_ORIGINS environment variable. An
+    # empty value allows no browser origin.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://github-intelligence.netlify.app"
 
     @property
     def is_production(self) -> bool:
