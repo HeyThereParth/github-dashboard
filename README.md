@@ -24,8 +24,6 @@ analytics to a multi-tenant dashboard through a typed, versioned REST API.
 
 ## What it does
 
-- **Multi-tenant workspaces** with owner/member role-based access; users are
-  provisioned automatically on their first authenticated request.
 - **GitHub App integration** — RS256 app authentication, short-lived installation
   tokens with caching, and owner-only workspace connection.
 - **Repository discovery and tracking** — list installation repositories and manage
